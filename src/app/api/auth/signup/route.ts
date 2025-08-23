@@ -1,44 +1,63 @@
 import { NextResponse } from "next/server";
-import { users, User } from "@/lib/data";
+
+// Định nghĩa kiểu User
+interface User {
+  id: string;
+  username: string;
+  password: string;
+  fullname: string;
+  email: string;
+  phone: string;
+}
+
+// Khai báo biến toàn cục đúng cách, để tránh lỗi "users sai"
+declare global {
+  var users: User[] | undefined;
+}
+
+const users: User[] = globalThis.users || [];
+globalThis.users = users;
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { taiKhoan, matKhau, xacNhanMatKhau, hoTen, email, soDt } = body;
+  try {
+    const body = await req.json();
+    const { username, password, confirmPassword, fullname, email, phone } = body;
 
-  if (!taiKhoan || !matKhau || !xacNhanMatKhau || !hoTen || !email || !soDt) {
-    return NextResponse.json(
-      { message: "Thiếu thông tin đăng ký." },
-      { status: 400 }
-    );
+    if (!username || !password || !fullname || !email || !phone) {
+      return NextResponse.json({ error: "Thiếu thông tin" }, { status: 400 });
+    }
+
+    if (password !== confirmPassword) {
+      return NextResponse.json({ error: "Mật khẩu xác nhận không khớp" }, { status: 400 });
+    }
+
+    const existingUser = users.find((user) => user.username === username);
+    if (existingUser) {
+      return NextResponse.json({ error: "Tài khoản đã tồn tại" }, { status: 409 });
+    }
+
+    const newUser: User = {
+      id: Date.now().toString(),
+      username,
+      password,
+      fullname,
+      email,
+      phone,
+    };
+
+    users.push(newUser);
+
+    return NextResponse.json({
+      message: "Đăng ký thành công",
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        name: newUser.fullname,
+        email: newUser.email,
+        phone: newUser.phone,
+      },
+    });
+  } catch (err) {
+    return NextResponse.json({ error: "Lỗi server" }, { status: 500 });
   }
-
-  if (matKhau !== xacNhanMatKhau) {
-    return NextResponse.json(
-      { message: "Mật khẩu và xác nhận không khớp." },
-      { status: 400 }
-    );
-  }
-
-  const existed = users.find((u) => u.taiKhoan === taiKhoan);
-  if (existed) {
-    return NextResponse.json(
-      { message: "Tài khoản đã tồn tại." },
-      { status: 409 }
-    );
-  }
-
-  const newUser: User = {
-    id: Date.now(),
-    taiKhoan,
-    matKhau, // cần để đối chiếu khi đăng nhập
-    hoTen,
-    email,
-    soDt,
-  };
-
-  users.push(newUser); // lưu vào danh sách users tạm thời
-
-  console.log("✅ Người dùng mới:", newUser);
-
-  return NextResponse.json({ message: "Đăng ký thành công!", user: newUser });
 }
